@@ -1,0 +1,6 @@
+print("ok")
+
+
+
+print("yimnli")
+
