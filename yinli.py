@@ -1,3 +1,3 @@
-print("ok")
+dfdprint("ok")
 
 
