@@ -25,6 +25,7 @@ batch_size=100
 wsz=5
 predict_days=11
 
+'''
 def smooth(a,wsz):
     # a:原始数据，NumPy 1-D array containing the data to be smoothed
     # 必须是1-D的，如果不是，请使用 np.ravel()或者np.squeeze()转化 
@@ -43,6 +44,18 @@ def smooth(a,wsz):
             mean=float(sum(temp[i+1-wsz:i+1]))/len(temp[i+1-wsz:i+1])
     temp[i]=mean
     return temp
+'''
+
+def smooth(a,WSZ):
+    # a:原始数据，NumPy 1-D array containing the data to be smoothed
+    # 必须是1-D的，如果不是，请使用 np.ravel()或者np.squeeze()转化 
+    # WSZ: smoothing window size needs, which must be odd number,
+    # as in the original MATLAB implementation
+    out0 = np.convolve(a,np.ones(WSZ,dtype=int),'valid')/WSZ
+    r = np.arange(1,WSZ-1,2)
+    start = np.cumsum(a[:WSZ-1])[::2]/r
+    stop = (np.cumsum(a[:-WSZ:-1])[::2]/r)[::-1]
+    return np.concatenate((  start , out0, stop  ))
 
 with open("./5_XSHG.600837.h5.csv",encoding='utf-8') as f:
 #csv_file=csv.reader(open('./5_XSHG.600837.h5.csv'),'r')
