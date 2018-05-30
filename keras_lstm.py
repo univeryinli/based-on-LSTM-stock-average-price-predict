@@ -23,16 +23,26 @@ test_size=1000
 batch_size=100
 #WSZ: smoothing window size needs, which must be odd number
 wsz=5
+predict_days=11
 
-def smooth(a,WSZ):
+def smooth(a,wsz):
     # a:原始数据，NumPy 1-D array containing the data to be smoothed
     # 必须是1-D的，如果不是，请使用 np.ravel()或者np.squeeze()转化 
     # WSZ: smoothing window size needs, which must be odd number,
-    out0 = np.convolve(a,np.ones(WSZ,dtype=int),'valid')/WSZ
+    '''out0 = np.convolve(a,np.ones(WSZ,dtype=int),'valid')/WSZ
     r = np.arange(1,WSZ-1,2)
     start = np.cumsum(a[:WSZ-1])[::2]/r
     stop = (np.cumsum(a[:-WSZ:-1])[::2]/r)[::-1]
     return np.concatenate((  start , out0, stop  ))
+    '''
+    temp=a
+    for i in range(len(a)):
+        if i<wsz:
+            mean=float(sum(temp[0:i+1]))/len(temp[0:i+1])
+        else:
+            mean=float(sum(temp[i+1-wsz:i+1]))/len(temp[i+1-wsz:i+1])
+    temp[i]=mean
+    return temp
 
 with open("./5_XSHG.600837.h5.csv",encoding='utf-8') as f:
 #csv_file=csv.reader(open('./5_XSHG.600837.h5.csv'),'r')
@@ -43,23 +53,25 @@ with open("./5_XSHG.600837.h5.csv",encoding='utf-8') as f:
     sample_size=len(close)-alpha
     
     for i in range(alpha,sample_size,belta):
-        temp=close[i-alpha:i]
+        temp=close[i-alpha:i+predict_days]
 #        x_cell[:,0]=np.array(temp)
-        rt=[(temp[close_index]/temp[close_index-1]) for close_index in range(1,len(temp))]
-        rt=(np.log(np.array([1]+rt)))**2
-        rt_mean=(sum(rt)/(len(rt)))*1e6
+        rt_temp=[1]+[(temp[close_index]/temp[close_index-1]) for close_index in range(1,len(temp))]
+        rt=(np.log(np.array(rt_temp[0:alpha])))**2
+        rt_pre=rt_temp[alpha:alpha+predict_days]
+        rt_mean=(sum(rt_pre)/(len(rt_pre)))*1e6
         smooth_rt=smooth(rt,wsz)
         x_cell[:,0]=rt
         x_cell[:,1]=smooth_rt
         x_data.append(x_cell)
-        y_data.append(rt_mean)         
+        y_data.append(rt_mean)
+        y_data=smooth(y_data,wsz)         
 x_data=np.array(x_data)
 y_data=np.array(y_data)
 
 x_train,y_train=x_data[0:train_size,:,:] , y_data[0:train_size]
 x_test,y_test=x_data[train_size:(train_size+test_size),:,:] , y_data[train_size:(train_size+test_size)]
 
-sio.savemat('y_test_conv_test1.mat', {'y_test': y_test})
+sio.savemat('y_test.mat', {'y_test': y_test})
 print('train_size:','x-',x_train.shape,'y-',y_train.shape)
 print('test_size','x-',x_test.shape,'y-',y_test.shape)
 print('start lstm')
@@ -80,7 +92,7 @@ class ValueLoss(keras.callbacks.Callback):
         self.vallos.append(logs.get('val_loss'))
 
 class myLSTM(object):
-    def __init__(self, time_length=alpha , channels=2):
+    def __init__(self, time_length=alpha , channels=input_dim):
         self.time_length = alpha
         self.channels = channels
 
@@ -143,8 +155,8 @@ class myLSTM(object):
         plt.plot(VALOS.vallos)
         plt.show()
         '''
-        sio_savemat('history.losses_conv_test1.mat',{'loss':history.losses})
-        sio_savemat('valos.losses_conv_test1.mat',{'loss':VALOS.vallos})
+        sio.savemat('history.losses_conv_test1.mat',{'loss':history.losses})
+        sio.savemat('valos.losses_conv_test1.mat',{'loss':VALOS.vallos})
 if __name__ == '__main__':
     myunet = myLSTM()
     myunet.train()
