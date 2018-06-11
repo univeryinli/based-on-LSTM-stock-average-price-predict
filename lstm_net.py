@@ -18,68 +18,18 @@ x_data=[]
 y_data=[]
 input_dim=2
 x_cell=np.zeros((alpha,input_dim))
-train_size=10000
+train_size=15000
 test_size=1000
 batch_size=100
 #WSZ: smoothing window size needs, which must be odd number
-wsz=5
+wsz5=11
+wsz10=21
+wsz101=101
 predict_days=11
 
-'''
-def smooth(a,wsz):
-    # a:原始数据，NumPy 1-D array containing the data to be smoothed
-    # 必须是1-D的，如果不是，请使用 np.ravel()或者np.squeeze()转化 
-    # WSZ: smoothing window size needs, which must be odd number,
-    '''out0 = np.convolve(a,np.ones(WSZ,dtype=int),'valid')/WSZ
-    r = np.arange(1,WSZ-1,2)
-    start = np.cumsum(a[:WSZ-1])[::2]/r
-    stop = (np.cumsum(a[:-WSZ:-1])[::2]/r)[::-1]
-    return np.concatenate((  start , out0, stop  ))
-    '''
-    temp=a
-    for i in range(len(a)):
-        if i<wsz:
-            mean=float(sum(temp[0:i+1]))/len(temp[0:i+1])
-        else:
-            mean=float(sum(temp[i+1-wsz:i+1]))/len(temp[i+1-wsz:i+1])
-    temp[i]=mean
-    return temp
-'''
 
-def smooth(a,WSZ):
-    # a:原始数据，NumPy 1-D array containing the data to be smoothed
-    # 必须是1-D的，如果不是，请使用 np.ravel()或者np.squeeze()转化 
-    # WSZ: smoothing window size needs, which must be odd number,
-    # as in the original MATLAB implementation
-    out0 = np.convolve(a,np.ones(WSZ,dtype=int),'valid')/WSZ
-    r = np.arange(1,WSZ-1,2)
-    start = np.cumsum(a[:WSZ-1])[::2]/r
-    stop = (np.cumsum(a[:-WSZ:-1])[::2]/r)[::-1]
-    return np.concatenate((  start , out0, stop  ))
-
-with open("./5_XSHG.600837.h5.csv",encoding='utf-8') as f:
-#csv_file=csv.reader(open('./5_XSHG.600837.h5.csv'),'r')
-    csv_file=csv.reader(f)
-    csv_list=list(csv_file)
-
-    close=[float(line[5]) for line in csv_list[1:]]
-    sample_size=len(close)-alpha
-    
-    for i in range(alpha,sample_size,belta):
-        temp=close[i-alpha:i+predict_days]
-#        x_cell[:,0]=np.array(temp)
-        rt_temp=[1]+[(temp[close_index]/temp[close_index-1]) for close_index in range(1,len(temp))]
-        rt=(np.log(np.array(rt_temp[0:alpha])))**2
-        rt_pre=rt_temp[alpha:alpha+predict_days]
-        rt_mean=(sum(rt_pre)/(len(rt_pre)))*1e6
-        smooth_rt=smooth(rt,wsz)
-        x_cell[:,0]=rt
-        x_cell[:,1]=smooth_rt
-        x_data.append(x_cell)
-        y_data.append(rt_mean)
-        y_data=smooth(y_data,wsz)         
-x_data=np.array(x_data)
-y_data=np.array(y_data)
+x_data=sio.loadmat('input.mat')['patch']
+y_data=sio.loadmat('output.mat')['value']
 
 x_train,y_train=x_data[0:train_size,:,:] , y_data[0:train_size]
 x_test,y_test=x_data[train_size:(train_size+test_size),:,:] , y_data[train_size:(train_size+test_size)]
@@ -111,7 +61,7 @@ class myLSTM(object):
 
     def get_net(self):
         inputs = Input((self.time_length, self.channels))
-        Conv1 = Conv1D(16, 1, input_shape=(alpha, 2), activation='relu', padding='same', kernel_initializer='he_normal')(inputs)
+        Conv1 = Conv1D(16, 1, input_shape=(alpha, input_dim), activation='relu', padding='same', kernel_initializer='he_normal')(inputs)
 
         print('Conv1.shape', Conv1.shape)
         LSTM1 = LSTM(32,return_sequences=True)(Conv1)
@@ -119,7 +69,7 @@ class myLSTM(object):
         LSTM1_2 = LSTM(32, return_sequences=True)(LSTM1_1)
         LSTM1_3 = LSTM(32, return_sequences=True)(LSTM1_2)
         LSTM1 = LSTM(64, return_sequences=True)(LSTM1_3)
-
+        
         Conv2 = Conv1D(16, 16, input_shape=(alpha, 2), activation='relu', padding='same', kernel_initializer='he_normal')(inputs)
         print('Conv2.shape', Conv2.shape)
         LSTM2 = LSTM(32, return_sequences=True)(Conv2)
@@ -150,6 +100,7 @@ class myLSTM(object):
     def train(self):
         model = self.get_net()
         print("got net")
+        
         history = LossHistory()
         VALOS = ValueLoss()
         model_checkpoint = ModelCheckpoint('LSTMnet.hdf5', monitor='loss', verbose=1, save_best_only=True)
@@ -158,7 +109,7 @@ class myLSTM(object):
         print('predict test data')
         Vt_result = model.predict(x_test,batch_size=batch_size)
         print(Vt_result)
-        sio.savemat('test_dpm_conv_test1.mat', {'result': Vt_result})
+        sio.savemat('test_dpm.mat', {'result': Vt_result})
         '''
         plt.figure(1)
         ax1 = plt.subplot(111)
@@ -168,8 +119,9 @@ class myLSTM(object):
         plt.plot(VALOS.vallos)
         plt.show()
         '''
-        sio.savemat('history.losses_conv_test1.mat',{'loss':history.losses})
-        sio.savemat('valos.losses_conv_test1.mat',{'loss':VALOS.vallos})
+        sio.savemat('history.losses.mat',{'loss':history.losses})
+        sio.savemat('valos.losses.mat',{'loss':VALOS.vallos})
 if __name__ == '__main__':
     myunet = myLSTM()
     myunet.train()
+
